@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perler beads - 拼豆图纸生成器</title>
+    <!-- 引入像素字体 -->
+    <style>
+        @font-face {
+            font-family: 'FusionPixel';
+            src: url('/static/fusion-pixel-12px-monospaced-zh_hans.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+    </style>
+    <!-- 引入独立CSS文件 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<!-- 顶部导航栏 -->
+<nav class="navbar">
+    <div class="nav-title">Perler beads</div>
+    <div class="nav-controls">
+        <!-- 语言切换 -->
+        <select id="langSwitch" class="pixel-select">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+        </select>
+        <!-- 主题配色切换 -->
+        <select id="themeSwitch" class="pixel-select">
+            <option value="default">默认主题</option>
+            <option value="purple">赛博紫调</option>
+            <option value="green">像素绿影</option>
+            <option value="orange">复古橙光</option>
+        </select>
+    </div>
+</nav>
+
+<!-- 主容器 -->
+<div class="container">
+    <!-- 表单区域：所有参数配置 -->
+    <form id="generateForm" enctype="multipart/form-data">
+        <div class="form-grid">
+            <!-- 0 拼豆品牌选择（修复：后端传入brands后会正常渲染） -->
+            <div class="form-group">
+                <label class="form-label" data-lang="brand">选择拼豆品牌</label>
+                <select name="brand" id="brand" class="pixel-select">
+                    {% for b in brands %}
+                    <option value="{{ b }}">{{ b }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- 1 图像输入（优化版：自适应不变形预览） -->
+            <div class="form-group full-width">
+                <label class="form-label" data-lang="image_input">图像输入</label>
+                <div id="imageUpload" class="image-upload-container">
+                    <input type="file" id="imageFile" name="image" accept="image/*" hidden>
+                    <div class="upload-content">
+                        <span class="plus-icon">+</span>
+                        <p data-lang="upload_tip">点击或拖拽图片至此</p>
+                    </div>
+                    <img id="previewImage" class="preview-img" hidden alt="预览图">
+                </div>
+            </div>
+
+            <!-- 2 采样间隔 -->
+            <div class="form-group">
+                <label class="form-label" data-lang="sampling">采样间隔</label>
+                <div class="number-input-group">
+                    <button type="button" class="num-btn" data-target="sampling" data-action="minus">-</button>
+                    <input type="text" name="sampling" id="sampling" class="pixel-input" value="1" data-min="1" data-default="1">
+                    <button type="button" class="num-btn" data-target="sampling" data-action="plus">+</button>
+                </div>
+            </div>
+
+            <!-- 3 描边类型 -->
+            <div class="form-group">
+                <label class="form-label" data-lang="stroke_type">描边类型</label>
+                <select name="stroke_type" id="stroke_type" class="pixel-select">
+                    <option value="cross">十字 / cross</option>
+                    <option value="block">块状 / block</option>
+                </select>
+            </div>
+
+            <!-- 4 描边厚度 -->
+            <div class="form-group">
+                <label class="form-label" data-lang="stroke_thickness">描边厚度</label>
+                <div class="number-input-group">
+                    <button type="button" class="num-btn" data-target="stroke_thickness" data-action="minus">-</button>
+                    <input type="text" name="stroke_thickness" id="stroke_thickness" class="pixel-input" value="1" data-min="1" data-default="1">
+                    <button type="button" class="num-btn" data-target="stroke_thickness" data-action="plus">+</button>
+                </div>
+            </div>
+
+            <!-- 5 描边颜色 -->
+            <div class="form-group">
+                <label class="form-label" data-lang="stroke_color">描边颜色</label>
+                <div class="color-picker-wrapper">
+                    <input type="color" name="stroke_color" id="stroke_color" class="pixel-color" value="#ffffff">
+                </div>
+            </div>
+
+            <!-- 6 放大倍率 -->
+            <div class="form-group">
+                <label class="form-label" data-lang="pixel">放大倍率</label>
+                <div class="number-input-group">
+                    <button type="button" class="num-btn" data-target="pixel" data-action="minus">-</button>
+                    <input type="text" name="pixel" id="pixel" class="pixel-input" value="30" data-min="30" data-default="30">
+                    <button type="button" class="num-btn" data-target="pixel" data-action="plus">+</button>
+                </div>
+            </div>
+
+            <!-- 7 屏蔽颜色 -->
+            <div class="form-group">
+                <label class="form-label" data-lang="block_color">屏蔽颜色</label>
+                <div class="block-color-wrapper">
+                    <label class="pixel-switch">
+                        <input type="checkbox" id="block_enable" name="block_enable">
+                        <span class="switch-track"></span>
+                    </label>
+                    <div class="color-picker-wrapper">
+                        <input type="color" name="block_color" id="block_color" class="pixel-color" value="#000000" disabled>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 8 容差（美化版） -->
+            <div class="form-group full-width">
+                <label class="form-label" data-lang="tolerance">容差: <span id="toleranceValue">0</span></label>
+                <input type="range" name="tolerance" id="tolerance" min="0" max="255" value="0" class="pixel-slider">
+            </div>
+
+            <!-- 9 像素边界颜色 -->
+            <div class="form-group">
+                <label class="form-label" data-lang="pixel_stroke">像素边界颜色</label>
+                <div class="color-picker-wrapper">
+                    <input type="color" name="pixel_stroke_color" id="pixel_stroke_color" class="pixel-color" value="#ffffff">
+                </div>
+            </div>
+        </div>
+
+        <!-- 执行按钮 -->
+        <div class="btn-group">
+            <button type="submit" class="generate-btn" data-lang="generate">生成图纸</button>
+            <button type="button" class="export-btn" data-lang="export">导出</button>
+        </div>
+    </form>
+
+    <!-- 图纸展示区域 -->
+    <div class="result-section">
+        <label class="form-label" data-lang="result">图纸预览</label>
+        <div class="image-switch">
+            <img id="resultImage" src="" class="result-img" hidden>
+            <!-- 严格按需求：像素风格眼睛图标，右上角切换 -->
+            <div class="eye-toggle" id="toggleIcon">
+                <svg class="eye-svg" viewBox="0 0 24 24">
+                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- 拼豆数量统计表格 -->
+    <div class="table-section">
+        <label class="form-label" data-lang="count">拼豆数量统计</label>
+        <div class="table-container">
+            <div class="count-summary" data-lang="total">总数量: 0</div>
+            <div id="countTable" class="four-column-table">
+                <!-- 数据将由JS动态填充 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 底部 -->
+<footer class="footer">
+    <a href="https://github.com/ZuoNian0814" target="_blank" class="github-link">
+        <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+        </svg>
+    </a>
+</footer>
+
+<!-- 核心JS：交互、验证、主题、语言、图片处理 -->
+<script>
+    // 双语配置
+    const langData = {
+        zh: {
+            brand: "选择拼豆品牌",
+            image_input: "图像输入",
+            upload_tip: "点击或拖拽图片至此",
+            sampling: "采样间隔",
+            stroke_type: "描边类型",
+            stroke_thickness: "描边厚度",
+            stroke_color: "描边颜色",
+            pixel: "放大倍率（清晰度）",
+            block_color: "屏蔽颜色",
+            tolerance: "容差",
+            pixel_stroke: "像素边界颜色",
+            generate: "生成图纸",
+            export: "导出",
+            result: "图纸预览",
+            count: "拼豆数量统计",
+            total: "总数量: "
+        },
+        en: {
+            brand: "Select Brand",
+            image_input: "Image Input",
+            upload_tip: "Click or Drag Image Here",
+            sampling: "Sampling Interval",
+            stroke_type: "Stroke Type",
+            stroke_thickness: "Stroke Thickness",
+            stroke_color: "Stroke Color",
+            pixel: "Zoom Ratio (clarity)",
+            block_color: "Block Color",
+            tolerance: "Tolerance",
+            pixel_stroke: "Pixel Border Color",
+            generate: "Generate Drawing",
+            export: "Export",
+            result: "Drawing Preview",
+            count: "Bead Count",
+            total: "Total: "
+        }
+    };
+
+    // 主题配色配置（light=光效，main=主色，bg=背景，text=文字）
+    const themes = {
+        default: { light: "#8064ff", main: "#303047", bg: "#1b1b2a", text: "#9e8cd2" },
+        purple: { light: "#d67dff", main: "#422a5e", bg: "#2a1b3d", text: "#e0b3ff" },
+        green: { light: "#64ff9c", main: "#2a4736", bg: "#1b2a21", text: "#8cd2a6" },
+        orange: { light: "#ff9c64", main: "#473a30", bg: "#2a211b", text: "#d2b08c" }
+    };
+
+    // 初始化：加载保存的主题和语言
+    document.addEventListener('DOMContentLoaded', () => {
+        const savedTheme = localStorage.getItem('perlerTheme') || 'default';
+        const savedLang = localStorage.getItem('perlerLang') || 'zh';
+
+        applyTheme(savedTheme);
+        switchLang(savedLang);
+        document.getElementById('themeSwitch').value = savedTheme;
+        document.getElementById('langSwitch').value = savedLang;
+
+        // 图片上传交互（修复版）
+        initImageUpload();
+        // 数字输入框验证与增减
+        initNumberInputs();
+        // 图纸切换
+        initImageSwitch();
+        // 表单提交（修复404后可正常使用）
+        initFormSubmit();
+        // 导出按钮 - 修复：调用exportImage并增加校验
+        document.querySelector('.export-btn').addEventListener('click', async () => {
+            // 校验：是否已生成图纸
+            const resultImg = document.getElementById('resultImage');
+            const resultSection = document.querySelector('.result-section');
+            if (!resultImg.src || resultImg.hidden) {
+                // 红色高亮容器，3秒后恢复
+                resultSection.classList.add('error');
+                setTimeout(() => resultSection.classList.remove('error'), 3000);
+                return;
+            }
+            await exportImage();
+        });
+    });
+
+    // 主题切换与保存
+    document.getElementById('themeSwitch').addEventListener('change', (e) => {
+        const theme = e.target.value;
+        localStorage.setItem('perlerTheme', theme);
+        applyTheme(theme);
+    });
+
+    // 语言切换与保存
+    document.getElementById('langSwitch').addEventListener('change', (e) => {
+        const lang = e.target.value;
+        localStorage.setItem('perlerLang', lang);
+        switchLang(lang);
+    });
+
+    // 应用主题配色
+    function applyTheme(themeName) {
+        const theme = themes[themeName];
+        document.documentElement.style.setProperty('--light-color', theme.light);
+        document.documentElement.style.setProperty('--main-color', theme.main);
+        document.documentElement.style.setProperty('--bg-color', theme.bg);
+        document.documentElement.style.setProperty('--text-color', theme.text);
+    }
+
+    // 切换语言
+    function switchLang(lang) {
+        document.querySelectorAll('[data-lang]').forEach(el => {
+            const key = el.getAttribute('data-lang');
+            if (langData[lang][key]) {
+                el.textContent = key === 'total' ? `${langData[lang][key]}0` : langData[lang][key];
+            }
+        });
+        document.documentElement.lang = lang;
+    }
+
+    // 图片上传与预览（完整版，自动隐藏文字）
+    function initImageUpload() {
+        const uploadContainer = document.getElementById('imageUpload');
+        const fileInput = document.getElementById('imageFile');
+        const previewImg = document.getElementById('previewImage');
+        const uploadContent = document.querySelector('.upload-content');
+
+        // 点击容器打开文件选择
+        uploadContainer.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // 选择图片后预览
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                // 显示图片
+                previewImg.src = event.target.result;
+                previewImg.hidden = false;
+                // 核心：隐藏背后的加号和文字
+                uploadContent.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // 拖拽上传（保留原有功能）
+        uploadContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        uploadContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const file = e.dataTransfer.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                previewImg.src = event.target.result;
+                previewImg.hidden = false;
+                // 拖拽也隐藏文字
+                uploadContent.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // 数字输入框：验证、增减、错误高亮
+    function initNumberInputs() {
+        // 增减按钮
+        document.querySelectorAll('.num-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = document.getElementById(btn.dataset.target);
+                const min = parseInt(target.dataset.min);
+                let val = parseInt(target.value) || min;
+                val = btn.dataset.action === 'plus' ? val + 1 : Math.max(min, val - 1);
+                target.value = val;
+                validateInputWithNoReset(target); // 只校验样式，不重置
+            });
+        });
+
+        // 输入验证：input只做样式提示，不重置；blur才重置
+        document.querySelectorAll('.pixel-input').forEach(input => {
+            input.addEventListener('input', () => validateInputWithNoReset(input));
+            input.addEventListener('blur', () => validateInput(input));
+        });
+    }
+
+    // 实时校验（仅样式，不重置值）
+    function validateInputWithNoReset(input) {
+        const min = parseInt(input.dataset.min);
+        const formGroup = input.closest('.form-group');
+        let val = input.value.trim();
+
+        if (!/^\d*$/.test(val) || (val && parseInt(val) < min)) {
+            formGroup.classList.add('error');
+            input.style.borderColor = '#ff4444';
+        } else {
+            formGroup.classList.remove('error');
+            input.style.borderColor = 'var(--light-color)';
+        }
+    }
+
+    // 失焦校验（非法值重置+红色轮廓）
+    function validateInput(input) {
+        const min = parseInt(input.dataset.min);
+        const def = parseInt(input.dataset.default);
+        const formGroup = input.closest('.form-group');
+        let val = input.value.trim();
+
+        if (!/^\d+$/.test(val) || parseInt(val) < min) {
+            formGroup.classList.add('error');
+            input.style.borderColor = '#ff4444';
+            input.value = def;
+            // 3秒后移除错误样式
+            setTimeout(() => {
+                formGroup.classList.remove('error');
+                input.style.borderColor = 'var(--light-color)';
+            }, 3000);
+        } else {
+            formGroup.classList.remove('error');
+            input.style.borderColor = 'var(--light-color)';
+            input.value = parseInt(val);
+        }
+    }
+
+    // 图纸切换（带颜色编号 / 纯上色）
+    function initImageSwitch() {
+        const toggleIcon = document.getElementById('toggleIcon');
+        const img = document.getElementById('resultImage');
+        // 存储两张图纸地址
+        let drawingUrl = ''; // 带颜色编号图纸（默认显示）
+        let cleanUrl = '';   // 纯上色像素图纸
+        let isClean = false;
+
+        // 接收后端返回的图片地址（生成图纸时调用）
+        window.setPreviewImages = (draw, clean) => {
+            drawingUrl = draw;
+            cleanUrl = clean;
+            // 默认显示第一张：带编号图纸
+            img.src = drawingUrl;
+            img.hidden = false;
+            isClean = false;
+        };
+
+        // 点击眼睛图标 → 切换两张图
+        toggleIcon.addEventListener('click', () => {
+            if (!drawingUrl || !cleanUrl) return; // 未生成图纸时不生效
+            isClean = !isClean;
+            img.src = isClean ? cleanUrl : drawingUrl;
+        });
+    }
+
+    // 表单提交：发送所有参数到后端（修复404后可正常使用）
+    function initFormSubmit() {
+        const form = document.getElementById('generateForm');
+        const formGrid = form.querySelector('.form-grid');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            // 先校验所有数字输入框
+            let isInvalid = false;
+            document.querySelectorAll('.pixel-input').forEach(input => {
+                validateInputWithNoReset(input);
+                if (input.closest('.form-group').classList.contains('error')) {
+                    isInvalid = true;
+                }
+            });
+            // 校验是否上传图片
+            const previewImg = document.getElementById('previewImage');
+            const imageFormGroup = document.querySelector('.form-group.full-width');
+            if (!previewImg.src || previewImg.hidden) {
+                imageFormGroup.classList.add('error');
+                setTimeout(() => imageFormGroup.classList.remove('error'), 3000);
+                isInvalid = true;
+            }
+            if (isInvalid) return;
+
+            const formData = new FormData(form);
+
+            // 处理屏蔽颜色：未勾选则设为null
+            if (!formData.get('block_enable')) formData.set('block_color', '');
+
+            try {
+                const res = await fetch('/generate', { method: 'POST', body: formData });
+                if (!res.ok) throw new Error('请求失败');
+                const data = await res.json();
+
+                // 显示结果图片
+                const img = document.getElementById('resultImage');
+                img.src = data.drawing_url;
+                img.hidden = false;
+                // 赋值两张图纸地址，触发预览
+                window.setPreviewImages(data.drawing_url, data.clean_url);
+
+                // 更新拼豆数量表格
+                updateCountTable(data.count_data, data.total_count);
+            } catch (err) {
+                // 表单区域红色高亮
+                formGrid.classList.add('error');
+                setTimeout(() => formGrid.classList.remove('error'), 3000);
+                console.error(err);
+            }
+        });
+    }
+
+    // 新增：动态更新拼豆数量表格
+    function updateCountTable(countData, total) {
+        const lang = document.getElementById('langSwitch').value;
+        // 更新总数量
+        document.querySelector('.count-summary').textContent = `${langData[lang].total}${total}`;
+        // 清空旧数据
+        const table = document.getElementById('countTable');
+        table.innerHTML = '';
+        // 四列布局渲染数据
+        for (let i = 0; i < countData.length; i += 2) {
+            const row = document.createElement('div');
+            row.className = 'table-row';
+            row.innerHTML = `
+                <span>${countData[i]?.id || ''}</span>
+                <span>${countData[i]?.count || ''}</span>
+                <span>${countData[i+1]?.id || ''}</span>
+                <span>${countData[i+1]?.count || ''}</span>
+            `;
+            table.appendChild(row);
+        }
+    }
+
+    // 容差滑动条实时显示数值
+    document.getElementById('tolerance').addEventListener('input', (e) => {
+        document.getElementById('toleranceValue').textContent = e.target.value;
+    });
+
+    // 屏蔽颜色复选框启用/禁用
+    document.getElementById('block_enable').addEventListener('change', (e) => {
+        document.getElementById('block_color').disabled = !e.target.checked;
+    });
+
+    // 实时更新颜色预览块（注：若DOM无对应元素，仅控制台警告，不影响核心功能）
+    document.getElementById('stroke_color').addEventListener('input', (e) => {
+        const preview = document.getElementById('strokeColorPreview');
+        if (preview) preview.style.backgroundColor = e.target.value;
+    });
+    document.getElementById('block_color').addEventListener('input', (e) => {
+        const preview = document.getElementById('blockColorPreview');
+        if (preview) preview.style.backgroundColor = e.target.value;
+    });
+    document.getElementById('pixel_stroke_color').addEventListener('input', (e) => {
+        const preview = document.getElementById('pixelStrokePreview');
+        if (preview) preview.style.backgroundColor = e.target.value;
+    });
+
+    // 初始化默认颜色（注：若DOM无对应元素，仅控制台警告，不影响核心功能）
+    const strokePreview = document.getElementById('strokeColorPreview');
+    if (strokePreview) strokePreview.style.backgroundColor = document.getElementById('stroke_color').value;
+    const blockPreview = document.getElementById('blockColorPreview');
+    if (blockPreview) blockPreview.style.backgroundColor = document.getElementById('block_color').value;
+    const pixelPreview = document.getElementById('pixelStrokePreview');
+    if (pixelPreview) pixelPreview.style.backgroundColor = document.getElementById('pixel_stroke_color').value;
+
+    // 导出功能：修复表单ID + 处理二进制流下载
+    async function exportImage() {
+      // 修复：表单ID改为正确的generateForm
+      const formData = new FormData(document.getElementById('generateForm'));
+
+      try {
+        // 发起请求，指定接收二进制流
+        const res = await fetch("/export", {
+          method: "POST",
+          body: formData
+        });
+
+        if (!res.ok) throw new Error('导出请求失败');
+
+        // 转成blob文件对象
+        const blob = await res.blob();
+        // 创建临时下载链接
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        // 下载文件名
+        a.download = "拼豆图纸.png";
+        a.click();
+        // 释放内存
+        window.URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error("导出失败", e);
+        // 导出失败高亮结果区域
+        const resultSection = document.querySelector('.result-section');
+        resultSection.classList.add('error');
+        setTimeout(() => resultSection.classList.remove('error'), 3000);
+      }
+    }
+</script>
+</body>
+</html>
