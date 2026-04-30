@@ -1,7 +1,7 @@
 # Perler-beads-template
 A local web mini program that automatically generates bean paste templates / 自动生成拼豆模板的本地web小程序
 
-![项目Logo](icon.ico)
+![项目Logo](icon.png)
 
 # 🎨 像素画转拼豆图纸生成工具
 # 🎨 Pixel Art to Perler Bead Pattern Generator
