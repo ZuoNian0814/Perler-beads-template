@@ -172,4 +172,4 @@ Prepare beads by the counted quantity—no manual counting needed.
 5. 色卡可自行修改，适配小众品牌或自定义配色
 5. Color cards are editable to fit niche brands or custom color schemes
 
-!![例子]("拼豆图纸 (2).png")
+![例子](example/拼豆图纸 (2).png)
